@@ -1,0 +1,66 @@
+import FWCore.ParameterSet.Config as cms
+
+process = cms.Process("MYTRUTHANALYZER")
+
+# Messages
+process.load("FWCore.MessageService.MessageLogger_cfi")
+process.load("Validation.Configuration.truthPrevalidation_cff")
+process.load("Configuration.Geometry.GeometryExtendedRun4D122Reco_cff")
+
+process.maxEvents = cms.untracked.PSet(
+    input=cms.untracked.int32(100)
+)
+
+process.source = cms.Source(
+    "PoolSource",
+    fileNames=cms.untracked.vstring(
+        "file:/eos/user/b/balmutra/tentau/step3.root"
+        #"file:34044.88_DYToLL_M_50_14TeV+Run4D120_enableTruth/step3.root"
+    )
+)
+
+process.TFileService = cms.Service(
+    "TFileService",
+    fileName = cms.string("myTenTau.root")
+    #fileName = cms.string("myDYtoLL.root")
+)
+
+process.myTruthAnalyzer = cms.EDAnalyzer(
+    "MyTruthAnalyzer",
+    src = cms.InputTag("truthLogicalGraphProducer"),
+    hitIndex = cms.InputTag("truthLogicalGraphHitIndexProducer"),
+    tracksters     = cms.InputTag("ticlCandidate"),
+    truthToTrackster = cms.InputTag(
+        "truthBranchTracksterAssociators",
+        "ticlCandidateTruthToReco" # be careful, this has two directions: ticlCandidateTruthToReco and ticlCandidateRecoToTruthFixed (or Adaptive)
+    ),
+    tracksterToTruthAdaptiveNominal = cms.InputTag(
+    "truthBranchTracksterAssociators",
+    "ticlCandidateRecoToTruthAdaptiveNominal"
+    ),
+
+    tracksterToTruthAdaptiveTight = cms.InputTag(
+    "truthBranchTracksterAssociators",
+    "ticlCandidateRecoToTruthAdaptiveTight"
+    ),
+
+    tracksterToTruthAdaptiveLoose = cms.InputTag(
+    "truthBranchTracksterAssociators",
+    "ticlCandidateRecoToTruthAdaptiveLoose"
+    ),
+
+    hgcalRecHits = cms.VInputTag(
+        cms.InputTag("HGCalRecHit", "HGCEERecHits"),
+        cms.InputTag("HGCalRecHit", "HGCHEFRecHits"),
+        cms.InputTag("HGCalRecHit", "HGCHEBRecHits"),
+    ),
+    ecalRecHits = cms.InputTag("ecalRecHit", "EcalRecHitsEB"),
+    hcalRecHits = cms.InputTag("hbhereco"),
+    doTenTau = cms.bool(True),
+    doDYtoLL = cms.bool(False),
+)
+
+process.truthanalyzer = cms.Path(
+    process.truthGraphPrevalidation
+    + process.myTruthAnalyzer
+)
