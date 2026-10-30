@@ -1,158 +1,156 @@
-# MyTruthAnalyzer
+# CMS Truth Graph Validation & Particle Reconstruction Matching
 
-A CMSSW `EDAnalyzer` that validates the CMS **Truth Graph** and studies the
-matching between truth-level particles and reconstructed **TICL Tracksters**,
-using detector-hit overlap and association scores.
+**CERN Summer Research Project (2026) · CMS Experiment · C++ / CMSSW / ROOT**
 
-> **Note:** This is a CMSSW plugin, not a standalone program. It depends on
-> CMSSW data formats, the CMS Truth Graph producers, TICL reconstruction, and
-> the CMSSW build/run system (`scram`, `cmsRun`). It cannot be compiled or run
-> outside a CMSSW release/checkout — see [Requirements](#requirements) and
-> [Usage](#usage) below.
+A scientific analysis plugin for studying how simulated particles are represented in the **CMS Truth Graph** and how reliably they can be associated with reconstructed **TICL Tracksters** in the Phase-2 detector environment.
 
-## Contents
+This project combines **graph traversal, detector-hit association, physics validation, and bidirectional matching evaluation** to investigate the connection between particle-level simulation and reconstructed detector objects.
 
-- [`MyTruthAnalyzer.cc`](#) — the analyzer plugin source
-- a configuration (# MyTruthAnalyzer
+> **Project scope:** Research analysis within CMSSW, not a standalone machine-learning model or general-purpose executable. The repository contains the analyzer and an example CMSSW job configuration; running it requires compatible CMS software and input data products.
 
-A CMSSW `EDAnalyzer` that validates the CMS **Truth Graph** and studies the
-matching between truth-level particles and reconstructed **TICL Tracksters**,
-using detector-hit overlap and association scores.
+## At a glance
 
-> **Note:** This is a CMSSW plugin, not a standalone program. It depends on
-> CMSSW data formats, the CMS Truth Graph producers, TICL reconstruction, and
-> the CMSSW build/run system (`scram`, `cmsRun`). It cannot be compiled or run
-> outside a CMSSW release/checkout — see [Requirements](#requirements) and
-> [Usage](#usage) below.
+| Area | What was investigated |
+| --- | --- |
+| Truth Graph validation | Particle identities, ancestry, kinematics, and tau decay modes |
+| Detector response | Truth-associated calorimeter hits and reconstructed energy response |
+| Truth → RECO matching | Whether charged pions from tau decays have a sufficiently good Trackster association |
+| RECO → Truth matching | Whether reconstructed Tracksters can be associated with truth-level tau-decay pions |
+| Working points | Nominal, tight, and loose RECO → Truth association maps |
+| Output | ROOT histograms, efficiency distributions, and event-summary logs |
 
+## Why this matters
 
-## What it does
+In the CMS experiment, simulated events provide information about the particles that *actually* generated detector signals, while reconstruction algorithms infer physics objects from those signals. Evaluating reconstruction performance requires a consistent way to connect these two views.
 
-The analyzer reads the CMS Truth Graph (generator + simulation history merged
-into a single navigable structure, see [CMS Truth Graph
-docs](https://cms-truth.docs.cern.ch/)) together with reconstructed
-Tracksters and detector RecHits, and fills a set of ROOT histograms used to:
+The **CMS Truth Graph** provides a unified representation of generator-level and simulation-level particle history. This project uses that representation to trace particle ancestry, inspect associated calorimeter energy, and assess links to reconstructed objects. The work focuses particularly on charged pions originating from tau decays in the forward calorimeter region.
 
-1. **Validate the Truth Graph** — particle multiplicities, mother/ancestor
-   relationships, kinematics, and decay classification, cross-checked against
-   known Standard Model expectations (mainly using a dedicated `TenTau`
-   sample).
-2. **Study detector response** — link truth particles to the calorimeter
-   SimHits/RecHits they produced, and compare truth energy to reconstructed
-   energy (overall, and split by ECAL/HCAL/HGCAL component).
-3. **Evaluate truth-to-reconstruction matching** — using
-   `ticl::AssociationMap` products, match truth pions (from τ decays) to TICL
-   Tracksters in both directions (Truth → RECO and RECO → Truth), and derive
-   matching efficiencies as a function of `pT`, using an association-score
-   threshold to define a "good match".
+## Analysis workflow
 
-The module supports two independent run modes, controlled by configuration
-flags:
-
-- `doTenTau` — validation and matching studies on a dedicated `TenTau`
-  sample (ten τ leptons per event).
-- `doDYtoLL` — validation of a Drell–Yan (Z → ℓℓ) sample, used as an
-  additional cross-check of decay classification and matching-score
-  distributions.
-
-Both can in principle be enabled in the same job, but they are intended to be
-run one at a time against the matching sample.
-
-## Requirements
-
-- A working **CMSSW** release/checkout (the plugin was developed against a
-  Phase-2 CMSSW release with Truth Graph support enabled).
-- The following data products must be available in the input files:
-  - `truth::Graph` (Truth Graph)
-  - `truth::LogicalGraphHitIndex` (SimHit index per logical truth particle)
-  - `std::vector<ticl::Trackster>` (TICL Tracksters)
-  - `ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>` — one Truth →
-    RECO map and up to three RECO → Truth maps (nominal / tight / loose)
-  - `EcalRecHitCollection`, `HBHERecHitCollection`, and one or more
-    `HGCRecHitCollection`s (EE, HEF, HEB)
-- These products are produced upstream by the Truth Graph producers and the
-  TICL/truth-association sequences (see the example configuration).
-
-## Configuration
-
-The analyzer is configured through the following `EDAnalyzer` parameters:
-
-| Parameter | Type | Description |
-|---|---|---|
-| `src` | `InputTag` | The `truth::Graph` product |
-| `hitIndex` | `InputTag` | The `truth::LogicalGraphHitIndex` product |
-| `tracksters` | `InputTag` | TICL Trackster (or Candidate) collection |
-| `truthToTrackster` | `InputTag` | Truth → RECO association map |
-| `tracksterToTruthAdaptiveNominal` | `InputTag` | RECO → Truth map, nominal working point |
-| `tracksterToTruthAdaptiveTight` | `InputTag` | RECO → Truth map, tight working point |
-| `tracksterToTruthAdaptiveLoose` | `InputTag` | RECO → Truth map, loose working point |
-| `hgcalRecHits` | `VInputTag` | HGCAL RecHit collections (EE, HEF, HEB) |
-| `ecalRecHits` | `InputTag` | ECAL barrel RecHits |
-| `hcalRecHits` | `InputTag` | HCAL barrel/endcap (HBHE) RecHits |
-| `doTenTau` | `bool` | Enable TenTau validation + matching studies |
-| `doDYtoLL` | `bool` | Enable DYtoLL validation studies |
-
-See `myTruthAnalyzer_cfg.py` for a complete job configuration, including
-the Truth Graph prevalidation sequence
-(`Validation.Configuration.truthPrevalidation_cff`) and the Phase-2 geometry
-(`GeometryExtendedRun4D122Reco_cff`) that must be loaded before the analyzer
-runs.
-
-⚠️ The `truthToTrackster` `InputTag` instance label is direction-sensitive —
-double check you are pointing at the Truth→RECO product
-(`ticlCandidateTruthToReco`) and not one of the RECO→Truth products
-(`ticlCandidateRecoToTruthFixed`/`...Adaptive*`), which are configured
-separately.
-
-## Usage
-
-This plugin must be built and run inside a CMSSW area:
-
-```bash
-# from within $CMSSW_BASE/src, with this plugin's package checked out
-scram b -j8
-
-cmsRun path/to/`myTruthAnalyzer_cfg.py
+```mermaid
+flowchart TD
+    A[Phase-2 simulated CMS events] --> B[Truth Graph and hit index]
+    A --> C[ECAL / HCAL / HGCAL RecHits]
+    A --> D[TICL Tracksters and association maps]
+    B --> E[Particle traversal and tau decay classification]
+    B --> F[Truth-associated detector hits]
+    C --> G[Reconstructed energy lookup by detector ID]
+    F --> G
+    B --> H[Truth-to-RECO matching]
+    D --> H
+    B --> I[RECO-to-Truth matching]
+    D --> I
+    E --> J[ROOT histograms and summaries]
+    G --> J
+    H --> J
+    I --> J
 ```
 
-The job produces a single ROOT file (`TFileService`, default name set in the
-`myTruthAnalyzer_cfg.py`, e.g. `myTenTau.root`) containing all booked histograms.
+### 1. Validate particle history and tau decays
 
-## Output histograms (selected)
+The C++ analyzer iterates over `truth::Graph` particle views, checks generator/simulation information, follows parent and child relationships, and records particle multiplicities and kinematics. For generator-level tau leptons, it distinguishes leptonic decays (`e`, `μ`) from hadronic decays and counts hadronic channels by charged-prong and neutral-pion multiplicity.
 
-Grouped by analysis stage (see source for the complete list):
+**Research finding:** In the project's TenTau analysis, the observed broad tau decay fractions were approximately **64% hadronic, 18% electronic, and 18% muonic**, consistent with expected overall behavior. These are reported analysis findings, not newly rerun results from this repository snapshot.
 
-- **Multiplicities & kinematics**: `GenTauNum`, `SimTauNum`, `TruthTauNum`,
-  `GenPhtNum`, `GenEleNum`, `*Pt`, `*Eta`, `TauDecayVtxRadius`
-- **Ancestry**: `GenTauMother`, `SimTauMother`, `GenPhtMother`, `SimPhtMother`,
-  `GenEleMother`, `SimEleMother`
-- **Detector response**: `TauSimHitE`, `TauRecHitE`, `TauEResponse`,
-  `TauEResponseVsEta`, `TauEResponseVsPt`
-- **EM/hadronic energy sharing** (τ → π± π0 ντ): `1ProngBFECALVsEta`,
-  `1ProngBFHCALVsEta`, `1ProngECALoverHCALVsEta`, `1Pi0BFECALVsEta`, and the
-  corresponding `VsPt` variants
-- **Truth → RECO matching**: `AssociationScoreOfPionBestMatch`,
-  `AssociationScoreOfPionBestMatchVsEta/Pt`, `TruthPionPtAll`,
-  `TruthPionPtMatched`, `TruthToRecoEfficiency`
-- **RECO → Truth matching**: `TrackesterToPionBestMatchNominal/Tight/Loose`,
-  `TracksterPtAll`, `TracksterPtMatched`, `RecoToTruthEfficiency`
-- **DYtoLL cross-checks**: `GenZMass`, `GenZPt`, `GenZEta`,
-  `GenEleFromZPt/Eta`, `GenMuFromZPt/Eta`, `GenTauFromZPt/Eta`
+### 2. Study calorimeter energy response
 
-Tau decay-mode branching fractions and matching-score bin summaries are also
-printed to the log at `endJob()`.
+The analyzer obtains calorimeter hits associated with truth particles using `truth::LogicalGraphHitIndex` and `truth::SubgraphHitView`, then looks up reconstructed energies using detector IDs. It fills distributions of truth-associated simulated energy, reconstructed hit energy, and reconstructed-to-truth particle energy response, including dependence on pseudorapidity (`η`) and transverse momentum (`pT`).
 
-## Known limitations / caveats
+For selected tau decay products, it also separates electromagnetic and hadronic calorimeter energy contributions to study their relative response.
 
-- Matching efficiency studies restrict truth pions and Tracksters to
-  `1.5 < |η| < 3.0` (HGCAL acceptance); results outside this range are not
-  covered.
-- The "good match" threshold (association score `< 0.6`) is currently
-  hardcoded rather than configurable.
+**Research finding:** The reported tau energy-response study did not show a clear dependence on `η` in the analyzed sample. This observation is sample- and selection-dependent.
+
+### 3. Evaluate bidirectional particle matching
+
+The analyzer consumes `ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>` products. For **Truth → RECO**, it selects charged pions with a tau ancestor and examines their candidate Trackster matches. For **RECO → Truth**, it inspects the reverse association maps and checks whether the associated truth particle is a charged pion originating from a tau decay.
+
+For each candidate, the **lowest association score is preferred**; a score below **0.6** is used as the working definition of a good match. The analysis focuses on the HGCAL acceptance region, approximately **1.5 < |η| < 3.0**.
+
+The nominal, tight, and loose RECO → Truth working points are inspected separately. The nominal map is also used for the reverse-direction efficiency histogram.
+
+**Research finding:** The project reported increasing matching efficiency with `pT`, with RECO → Truth generally higher than Truth → RECO. These curves should be interpreted alongside the selection and histogram-denominator caveats below.
+
+## Implementation
+
+| Technology | Role |
+| --- | --- |
+| **C++** | Event processing, graph traversal, hit lookup, matching selection, and summary counters |
+| **CMSSW** | CMS event framework, data formats, modules, and configuration |
+| **ROOT** | `TH1F` / `TH2F` histograms and ROOT output via `TFileService` |
+| **CMS Truth Graph** | Unified generator/simulation particle relationships |
+| **TICL** | Reconstructed Tracksters and truth association maps |
+| **Python** | `cmsRun` job configuration and product wiring |
+
+### Key implementation decisions
+
+- **Token-based input access:** The analyzer declares `consumes` tokens for required event products.
+- **Detector-ID lookup:** A hash map links detector-cell IDs to reconstructed hit energies for efficient per-event lookup.
+- **Explicit matching directions:** Truth → RECO and RECO → Truth maps are configured independently to avoid accidentally reversing the association semantics.
+- **Sample-specific execution:** `doTenTau` and `doDYtoLL` enable different analysis paths.
+- **Structured outputs:** Histograms are booked at job start, filled during event processing, and summarized at job end.
+
+## Repository files
+
+```text
+.
+├── README.md
+├── MyTruthAnalyzer.cc       # CMSSW EDAnalyzer implementation
+└── myTruthAnalyzer_cfg.py   # Example CMSSW job configuration
+```
+
+A complete CMSSW package also requires appropriate package metadata/build configuration (such as `BuildFile.xml`), which is **not included** in the supplied files.
+
+## Requirements and running the analysis
+
+This is a **CMSSW plugin**, not a standalone C++ program. It requires a compatible Phase-2 CMSSW checkout with Truth Graph support, upstream truth/reconstruction association producers, and input files containing the expected collections.
+
+The development context included Phase-2 CMSSW pre-release environments. Exact compatibility with a fresh CMSSW checkout has **not** been independently verified for this repository snapshot.
+
+1. Place the source in a suitable CMSSW plugin package and provide the required `BuildFile.xml` and plugin dependencies.
+2. Activate the matching CMSSW runtime environment.
+3. Edit `myTruthAnalyzer_cfg.py`: replace the example EOS input path with a file you can access; select `doTenTau` or `doDYtoLL`; verify the configured product labels exist in that file/job.
+4. Build and execute from the CMSSW environment:
+
+```bash
+cd "$CMSSW_BASE/src"
+eval "$(scram runtime -sh)"
+scram b -j8
+cmsRun path/to/myTruthAnalyzer_cfg.py
+```
+
+The configuration loads `Validation.Configuration.truthPrevalidation_cff` and `Configuration.Geometry.GeometryExtendedRun4D122Reco_cff`, and writes histograms through `TFileService` (configured as `myTenTau.root` in the provided example).
+
+> **Reproducibility status:** These are CMSSW integration steps, not a claim that the uploaded source currently compiles and runs unchanged. See the engineering notes below before attempting a fresh build.
+
+## Selected outputs
+
+| Study | Representative ROOT histograms |
+| --- | --- |
+| Tau decay and particle counts | `GenTauNum`, `SimTauNum`, `TruthTauNum`, `TauDecayVtxRadius` |
+| Particle ancestry | `GenTauMother`, `GenPhtMother`, `GenEleMother` |
+| Energy response | `TauSimHitE`, `TauRecHitE`, `TauEResponse`, `TauEResponseVsEta`, `TauEResponseVsPt` |
+| EM / hadronic sharing | `1ProngBFECALVsEta`, `1ProngBFHCALVsEta`, `1ProngECALoverHCALVsEta` |
+| Truth → RECO | `AssociationScoreOfPionBestMatch`, `TruthPionPtAll`, `TruthPionPtMatched`, `TruthToRecoEfficiency` |
+| RECO → Truth | `TrackesterToPionBestMatchNominal`, `TrackesterToPionBestMatchTight`, `TrackesterToPionBestMatchLoose`, `RecoToTruthEfficiency` |
+| Drell–Yan checks | `GenZMass`, `GenZPt`, `GenZEta`, `GenEleFromZPt`, `GenMuFromZPt` |
+
+For a public portfolio, add **actual exported plots** from the analysis (especially tau branching fractions, response vs. `η`, score distributions, and the two efficiency curves). Avoid adding illustrative plots that could be mistaken for measured results.
+
+
+## Next steps
+
+- Make acceptance, score threshold, and histogram configuration explicit parameters.
+- Consolidate repeated matching logic across nominal/tight/loose working points.
+- Add denominator-safe energy calculations and validate efficiency selections.
+- Provide a CMSSW `BuildFile.xml`, a tested release identifier, and a small accessible validation input where permitted.
+- Add reference ROOT plots and documented analysis settings to support independent interpretation.
+
+## Research context and acknowledgments
+
+Developed during **Summer 2026 research training at CERN**, in the context of CMS Phase-2 reconstruction and Truth Graph validation. The work used CMS software, simulation, and reconstruction infrastructure developed by the broader collaboration. The analyzer and configuration in this repository represent the project-specific analysis work; they should not be interpreted as authorship of the underlying CMS Truth Graph or TICL frameworks.
 
 ## References
 
-- CMS Truth Graph documentation: <https://cms-truth.docs.cern.ch/data-model/>
-- Identification of hadronic tau lepton decays using a deep neural network,
-  *JINST* 17 (2022) P07023cfg.py`) showing how the module is wired into a
-  CMSSW job (see [Configuration](#configuration))
+- [CMS Truth Graph documentation](https://cms-truth.docs.cern.ch/)
+- [CMS Software (CMSSW)](https://github.com/cms-sw/cmssw)
+
